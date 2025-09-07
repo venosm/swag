@@ -1,0 +1,43 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "description": "Testing custom template delimeters",
+        "title": "Swagger Example API",
+        "termsOfService": "http://swagger.io/terms/",
+        "contact": {},
+        "version": "1.0"
+    },
+    "paths": {
+        "/myfunc": {
+            "get": {
+                "description": "My Function",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/components/schemas/api.MyStruct"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "servers": [
+        {
+            "url": "http://"
+        }
+    ],
+    "components": {
+        "schemas": {
+        "api.MyStruct": {
+            "type": "object",
+            "properties": {
+                "urltemplate": {
+                    "type": "string",
+                    "example": "http://example.org/{{ path }}"
+                }
+            }
+        }
+        }
+    }
+}
