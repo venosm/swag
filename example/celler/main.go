@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"golang.org/x/net/webdav"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,7 +10,6 @@ import (
 	_ "github.com/venosm/swag/example/celler/docs"
 	"github.com/venosm/swag/example/celler/httputil"
 
-	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
@@ -56,6 +56,8 @@ import (
 //	@authorizationUrl						https://example.com/oauth/authorize
 //	@scope.admin							Grants read and write access to administrative information
 
+var Handler *webdav.Handler
+
 func main() {
 	r := gin.Default()
 
@@ -92,7 +94,7 @@ func main() {
 			examples.GET("attribute", c.AttributeExample)
 		}
 	}
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(Handler))
 	r.Run(":8080")
 }
 

@@ -1,13 +1,13 @@
-module github.com/venosm/swaggo/example/celler
+module github.com/venosm/swag/example/celler
 
 go 1.25
 
 require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/gofrs/uuid v4.4.0+incompatible
-	github.com/swaggo/files v1.0.1
 	github.com/swaggo/gin-swagger v1.6.0
-	github.com/venosm/swaggo v1.0.0
+	github.com/venosm/swag v1.0.0
+	github.com/venosm/swag-files v1.0.0
 )
 
 require (

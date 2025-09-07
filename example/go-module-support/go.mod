@@ -1,11 +1,11 @@
-module github.com/venosm/swaggo/example/go-module-support
+module github.com/venosm/swag/example/go-module-support
 
 go 1.25
 
 require (
 	github.com/gin-gonic/gin v1.10.1
 	github.com/swaggo/examples v0.0.0-20190624100559-f57286ab550c
-	github.com/venosm/swaggo v1.0.0
+	github.com/venosm/swag v1.0.0
 )
 
 require (

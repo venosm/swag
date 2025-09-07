@@ -5,8 +5,8 @@ import (
 	"github.com/venosm/swag/example/object-map-example/controller"
 	_ "github.com/venosm/swag/example/object-map-example/docs"
 
-	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
+	swaggerFiles "github.com/venosm/swag-files"
 )
 
 //	@title			Swagger Map Example API

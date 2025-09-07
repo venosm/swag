@@ -100,9 +100,8 @@ github.com/twitchyliquid64/golang-asm v0.15.1 h1:SU5vSMR7hnwNxj24w34ZyCi/FmDZTkS
 github.com/twitchyliquid64/golang-asm v0.15.1/go.mod h1:a1lVb/DtPvCB8fslRZhAngC2+aY1QWCk3Cedj/Gdt08=
 github.com/ugorji/go/codec v1.3.0 h1:Qd2W2sQawAfG8XSvzwhBeoGq71zXOC/Q1E9y/wUcsUA=
 github.com/ugorji/go/codec v1.3.0/go.mod h1:pRBVtBSKl77K30Bv8R2P+cLSGaTtex6fsA2Wjqmfxj4=
-github.com/venosm/swag v1.0.0 h1:4nwZduuXKAS7neAl5swxni3c6LgwyEuyJtb3Zj8prNM=
-github.com/venosm/swag v1.0.0/go.mod h1:6A6eUC9Sczfd/8HfzjvLiE08C+OC4C+c04NKQwdBnDw=
-github.com/venosm/swaggo v1.0.0/go.mod h1:6A6eUC9Sczfd/8HfzjvLiE08C+OC4C+c04NKQwdBnDw=
+github.com/venosm/swag v1.0.0 h1:8x7sbuTiNx0+boyu/3dIVL3k/BwH/heLgR4U4w4x9nA=
+github.com/venosm/swag v1.0.0/go.mod h1:I6nM7zDNoHCtVjVnGmOatj8SxEOQFoJny904p9GQMRI=
 golang.org/x/arch v0.20.0 h1:dx1zTU0MAE98U+TQ8BLl7XsJbgze2WnNKF/8tGp/Q6c=
 golang.org/x/arch v0.20.0/go.mod h1:bdwinDaKcfZUGpH09BB7ZmOfhalA8lQdzl62l8gGWsk=
 golang.org/x/crypto v0.41.0 h1:WKYxWedPGCTVVl5+WHSSrOBT0O8lx32+zxmHxijgXp4=
