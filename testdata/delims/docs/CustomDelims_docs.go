@@ -42,7 +42,7 @@ const docTemplateCustomDelims = `{
     },
     "servers": [
         {
-            "url": "http://{%.Host%}{%.BasePath%}"
+            "url": "https://{%.Host%}{%.BasePath%}"
         }
     ]
 }`

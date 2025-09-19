@@ -254,7 +254,7 @@
     },
     "servers": [
         {
-            "url": "http://petstore-user.swagger.io/v3"
+            "url": "https://petstore-user.swagger.io/v3"
         }
     ],
     "components": {

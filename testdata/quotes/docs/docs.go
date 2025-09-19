@@ -29,7 +29,7 @@ const docTemplate = `{
     },
     "servers": [
         {
-            "url": "http://{{.Host}}{{.BasePath}}"
+            "url": "https://{{.Host}}{{.BasePath}}"
         }
     ],
     "tags": [

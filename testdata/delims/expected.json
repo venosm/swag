@@ -24,7 +24,7 @@
     },
     "servers": [
         {
-            "url": "http://"
+            "url": "https://"
         }
     ],
     "components": {

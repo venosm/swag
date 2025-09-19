@@ -490,20 +490,22 @@ func parseOverrides(r io.Reader) (map[string]string, error) {
 }
 
 func (g *Gen) writeGoDoc(packageName string, output io.Writer, swagger *spec.Swagger, config *Config) error {
-	generator, err := template.New("swagger_info").Funcs(template.FuncMap{
-		"printDoc": func(v string) string {
-			// For OpenAPI 3.0, schemes are part of servers array, so don't add them separately
-			if swagger.Swagger == "3.0.0" {
-				// Just sanitize backticks for OpenAPI 3.0 - schemes are already handled in servers
-				return strings.Replace(v, "`", "`+\"`\"+`", -1)
-			} else {
-				// Add schemes for Swagger 2.0
-				v = "{\n    \"schemes\": " + config.LeftTemplateDelim + " marshal .Schemes " + config.RightTemplateDelim + "," + v[1:]
-				// Sanitize backticks
-				return strings.Replace(v, "`", "`+\"`\"+`", -1)
-			}
+	generator, err := template.New("swagger_info").Funcs(
+		template.FuncMap{
+			"printDoc": func(v string) string {
+				// For OpenAPI 3.0, schemes are part of servers array, so don't add them separately
+				if swagger.Swagger == "3.0.0" {
+					// Just sanitize backticks for OpenAPI 3.0 - schemes are already handled in servers
+					return strings.Replace(v, "`", "`+\"`\"+`", -1)
+				} else {
+					// Add schemes for Swagger 2.0
+					v = "{\n    \"schemes\": " + config.LeftTemplateDelim + " marshal .Schemes " + config.RightTemplateDelim + "," + v[1:]
+					// Sanitize backticks
+					return strings.Replace(v, "`", "`+\"`\"+`", -1)
+				}
+			},
 		},
-	}).Parse(packageTemplate)
+	).Parse(packageTemplate)
 	if err != nil {
 		return err
 	}
@@ -536,6 +538,7 @@ func (g *Gen) writeGoDoc(packageName string, output io.Writer, swagger *spec.Swa
 			Security:            swagger.Security,
 			Tags:                swagger.Tags,
 			ExternalDocs:        swagger.ExternalDocs,
+			Schemes:             swagger.Schemes,
 		},
 	}
 
@@ -560,37 +563,39 @@ func (g *Gen) writeGoDoc(packageName string, output io.Writer, swagger *spec.Swa
 
 	buffer := &bytes.Buffer{}
 
-	err = generator.Execute(buffer, struct {
-		Timestamp          time.Time
-		Doc                string
-		Host               string
-		PackageName        string
-		BasePath           string
-		Title              string
-		Description        string
-		Version            string
-		State              string
-		InstanceName       string
-		Schemes            []string
-		GeneratedTime      bool
-		LeftTemplateDelim  string
-		RightTemplateDelim string
-	}{
-		Timestamp:          time.Now(),
-		GeneratedTime:      config.GeneratedTime,
-		Doc:                string(buf),
-		Host:               swagger.Host,
-		PackageName:        packageName,
-		BasePath:           swagger.BasePath,
-		Schemes:            swagger.Schemes,
-		Title:              swagger.Info.Title,
-		Description:        swagger.Info.Description,
-		Version:            swagger.Info.Version,
-		State:              state,
-		InstanceName:       config.InstanceName,
-		LeftTemplateDelim:  config.LeftTemplateDelim,
-		RightTemplateDelim: config.RightTemplateDelim,
-	})
+	err = generator.Execute(
+		buffer, struct {
+			Timestamp          time.Time
+			Doc                string
+			Host               string
+			PackageName        string
+			BasePath           string
+			Title              string
+			Description        string
+			Version            string
+			State              string
+			InstanceName       string
+			Schemes            []string
+			GeneratedTime      bool
+			LeftTemplateDelim  string
+			RightTemplateDelim string
+		}{
+			Timestamp:          time.Now(),
+			GeneratedTime:      config.GeneratedTime,
+			Doc:                string(buf),
+			Host:               swagger.Host,
+			PackageName:        packageName,
+			BasePath:           swagger.BasePath,
+			Schemes:            swagger.Schemes,
+			Title:              swagger.Info.Title,
+			Description:        swagger.Info.Description,
+			Version:            swagger.Info.Version,
+			State:              state,
+			InstanceName:       config.InstanceName,
+			LeftTemplateDelim:  config.LeftTemplateDelim,
+			RightTemplateDelim: config.RightTemplateDelim,
+		},
+	)
 	if err != nil {
 		return err
 	}
@@ -616,21 +621,28 @@ func (g *Gen) convertToOpenAPI3(input []byte) ([]byte, error) {
 		delete(doc, "swagger")
 	}
 
+	schemes, hasSchemes := doc["schemes"]
 	// Convert host + basePath to servers
 	if host, hasHost := doc["host"]; hasHost {
 		if basePath, hasBasePath := doc["basePath"]; hasBasePath {
-			servers := []map[string]interface{}{
-				{
-					"url": fmt.Sprintf("http://%s%s", host, basePath),
-				},
+			var servers []map[string]interface{}
+
+			if hasSchemes {
+				for _, s := range schemes.([]interface{}) {
+					servers = append(servers, map[string]interface{}{"url": fmt.Sprintf("%s://%s%s", s, host, basePath)})
+				}
+			} else {
+				servers = append(servers, map[string]interface{}{"url": fmt.Sprintf("https://%s%s", host, basePath)})
 			}
+
 			doc["servers"] = servers
 		} else {
 			servers := []map[string]interface{}{
 				{
-					"url": fmt.Sprintf("http://%s", host),
+					"url": fmt.Sprintf("https://%s", host),
 				},
 			}
+
 			doc["servers"] = servers
 		}
 		delete(doc, "host")
