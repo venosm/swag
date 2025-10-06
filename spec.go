@@ -3,7 +3,6 @@ package swag
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/buger/jsonparser"
 	"strings"
 	"text/template"
 )
@@ -20,6 +19,14 @@ type Spec struct {
 	SwaggerTemplate  string
 	LeftDelim        string
 	RightDelim       string
+}
+
+// Scheme returns the first scheme from Schemes array (for template usage)
+func (i *Spec) Scheme() string {
+	if len(i.Schemes) > 0 {
+		return i.Schemes[0]
+	}
+	return "https"
 }
 
 // ReadDoc parses SwaggerTemplate into swagger document.
@@ -48,39 +55,7 @@ func (i *Spec) ReadDoc() string {
 		tpl = tpl.Delims(i.LeftDelim, i.RightDelim)
 	}
 
-	if strings.Contains(i.SwaggerTemplate, "servers") {
-		serversData, _, _, err := jsonparser.Get([]byte(i.SwaggerTemplate), "servers")
-		if err != nil {
-			return i.SwaggerTemplate
-		}
-
-		var existingServers []interface{}
-		if err := json.Unmarshal(serversData, &existingServers); err != nil {
-			return i.SwaggerTemplate
-		}
-
-		var newServers []interface{}
-		for _, server := range existingServers {
-			for _, schema := range i.Schemes {
-				if mapUrl, ok := server.(map[string]interface{}); ok {
-					if u, exists := mapUrl["url"]; exists {
-						if strings.Split(u.(string), ":")[0] == schema {
-							m := make(map[string]interface{})
-							m["url"] = u
-							newServers = append(newServers, m)
-						}
-					}
-				}
-			}
-		}
-
-		if len(newServers) > 0 {
-			newServersJSON, _ := json.Marshal(newServers)
-			result, _ := jsonparser.Set([]byte(i.SwaggerTemplate), newServersJSON, "servers")
-			i.SwaggerTemplate = string(result)
-		}
-	}
-
+	// Parse template to resolve {{.Scheme}}, {{.Host}} and {{.BasePath}} variables
 	parsed, err := tpl.Parse(i.SwaggerTemplate)
 	if err != nil {
 		return i.SwaggerTemplate

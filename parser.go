@@ -55,18 +55,31 @@ const (
 	versionAttr             = "@version"
 	descriptionAttr         = "@description"
 	descriptionMarkdownAttr = "@description.markdown"
-	secBasicAttr            = "@securitydefinitions.basic"
-	secAPIKeyAttr           = "@securitydefinitions.apikey"
-	secApplicationAttr      = "@securitydefinitions.oauth2.application"
-	secImplicitAttr         = "@securitydefinitions.oauth2.implicit"
-	secPasswordAttr         = "@securitydefinitions.oauth2.password"
-	secAccessCodeAttr       = "@securitydefinitions.oauth2.accesscode"
-	tosAttr                 = "@termsofservice"
-	extDocsDescAttr         = "@externaldocs.description"
-	extDocsURLAttr          = "@externaldocs.url"
-	xCodeSamplesAttr        = "@x-codesamples"
-	scopeAttrPrefix         = "@scope."
-	stateAttr               = "@state"
+	// Swagger 2.0 legacy security annotations (deprecated but supported)
+	secBasicAttr       = "@securitydefinitions.basic"
+	secAPIKeyAttr      = "@securitydefinitions.apikey"
+	secApplicationAttr = "@securitydefinitions.oauth2.application"
+	secImplicitAttr    = "@securitydefinitions.oauth2.implicit"
+	secPasswordAttr    = "@securitydefinitions.oauth2.password"
+	secAccessCodeAttr  = "@securitydefinitions.oauth2.accesscode"
+	// OpenAPI 3.0 security annotations
+	secHTTPAttr          = "@securityschemes.http"
+	secAPIKeySchemeAttr  = "@securityschemes.apikey"
+	secOAuth2Attr        = "@securityschemes.oauth2"
+	secOpenIDConnectAttr = "@securityschemes.openidconnect"
+	// OpenAPI 3.0 OAuth2 flows
+	secOAuth2AuthCodeAttr          = "@securityschemes.oauth2.authorizationcode"
+	secOAuth2ClientCredentialsAttr = "@securityschemes.oauth2.clientcredentials"
+	secOAuth2ImplicitAttr          = "@securityschemes.oauth2.implicit"
+	secOAuth2PasswordAttr          = "@securityschemes.oauth2.password"
+	tosAttr                        = "@termsofservice"
+	extDocsDescAttr                = "@externaldocs.description"
+	extDocsURLAttr                 = "@externaldocs.url"
+	xCodeSamplesAttr               = "@x-codesamples"
+	scopeAttrPrefix                = "@scope."
+	stateAttr                      = "@state"
+	privateAttr                    = "@private"
+	privateFileAttr                = "@privatefile"
 )
 
 // ParseFlag determine what to parse
@@ -109,8 +122,10 @@ var allMethod = map[string]struct{}{
 
 // Parser implements a parser for Go source files.
 type Parser struct {
-	// swagger represents the root document object for the API specification
+	// swagger represents the root document object for the API specification (includes all operations, including @Private)
 	swagger *spec.Swagger
+	// publicSwagger represents the swagger document with only public operations (excludes @Private)
+	publicSwagger *spec.Swagger
 
 	// packages store entities of APIs, definitions, file, package path etc.  and their relations
 	packages *PackagesDefinitions
@@ -214,6 +229,30 @@ type Debugger interface {
 func New(options ...func(*Parser)) *Parser {
 	parser := &Parser{
 		swagger: &spec.Swagger{
+			SwaggerProps: spec.SwaggerProps{
+				Info: &spec.Info{
+					InfoProps: spec.InfoProps{
+						Contact: &spec.ContactInfo{},
+						License: nil,
+					},
+					VendorExtensible: spec.VendorExtensible{
+						Extensions: spec.Extensions{},
+					},
+				},
+				Paths: &spec.Paths{
+					Paths: make(map[string]spec.PathItem),
+					VendorExtensible: spec.VendorExtensible{
+						Extensions: nil,
+					},
+				},
+				Definitions:         make(map[string]spec.Schema),
+				SecurityDefinitions: make(map[string]*spec.SecurityScheme),
+			},
+			VendorExtensible: spec.VendorExtensible{
+				Extensions: nil,
+			},
+		},
+		publicSwagger: &spec.Swagger{
 			SwaggerProps: spec.SwaggerProps{
 				Info: &spec.Info{
 					InfoProps: spec.InfoProps{
@@ -463,6 +502,9 @@ func (parser *Parser) ParseAPIMultiSearchDir(searchDirs []string, mainAPIFile st
 		return err
 	}
 
+	// Copy general API info to public swagger
+	parser.copyGeneralAPIInfoToPublicSwagger()
+
 	parser.parsedSchemas, err = parser.packages.ParseTypes()
 	if err != nil {
 		return err
@@ -645,7 +687,9 @@ func parseGeneralAPIInfo(parser *Parser, comments []string) error {
 
 				tag.TagProps.ExternalDocs.Description = value
 			}
-		case secBasicAttr, secAPIKeyAttr, secApplicationAttr, secImplicitAttr, secPasswordAttr, secAccessCodeAttr:
+		case secBasicAttr, secAPIKeyAttr, secApplicationAttr, secImplicitAttr, secPasswordAttr, secAccessCodeAttr,
+			secHTTPAttr, secAPIKeySchemeAttr, secOAuth2AuthCodeAttr, secOAuth2ClientCredentialsAttr,
+			secOAuth2ImplicitAttr, secOAuth2PasswordAttr, secOpenIDConnectAttr:
 			scheme, err := parseSecAttributes(attribute, comments, &line)
 			if err != nil {
 				return err
@@ -765,12 +809,18 @@ func parseSecAttributes(context string, lines []string, index *int) (*spec.Secur
 		descriptionAttr  = "@description"
 		tokenURL         = "@tokenurl"
 		authorizationURL = "@authorizationurl"
+		openIDConnectURL = "@openidconnecturl"
+		scheme           = "@scheme"
+		bearerFormat     = "@bearerformat"
 	)
 
 	var search []string
 
 	attribute := strings.ToLower(FieldsByAnySpace(lines[*index], 2)[0])
+
+	// Determine required fields based on security type
 	switch attribute {
+	// Swagger 2.0 legacy (backward compatibility)
 	case secBasicAttr:
 		return spec.BasicAuth(), nil
 	case secAPIKeyAttr:
@@ -781,12 +831,26 @@ func parseSecAttributes(context string, lines []string, index *int) (*spec.Secur
 		search = []string{authorizationURL}
 	case secAccessCodeAttr:
 		search = []string{tokenURL, authorizationURL}
+	// OpenAPI 3.0
+	case secHTTPAttr:
+		search = []string{scheme}
+	case secAPIKeySchemeAttr:
+		search = []string{in, name}
+	case secOAuth2AuthCodeAttr:
+		search = []string{tokenURL, authorizationURL}
+	case secOAuth2ClientCredentialsAttr, secOAuth2PasswordAttr:
+		search = []string{tokenURL}
+	case secOAuth2ImplicitAttr:
+		search = []string{authorizationURL}
+	case secOpenIDConnectAttr:
+		search = []string{openIDConnectURL}
 	}
 
 	// For the first line we get the attributes in the context parameter, so we skip to the next one
 	*index++
 
 	attrMap, scopes := make(map[string]string), make(map[string]string)
+	optionalFields := make(map[string]string) // For optional fields like bearerFormat
 	extensions, description := make(map[string]interface{}), ""
 
 loopline:
@@ -810,6 +874,12 @@ loopline:
 			}
 		}
 
+		// Optional fields
+		if securityAttr == bearerFormat {
+			optionalFields[securityAttr] = value
+			continue
+		}
+
 		if isExists, err := isExistsScope(securityAttr); err != nil {
 			return nil, err
 		} else if isExists {
@@ -829,13 +899,21 @@ loopline:
 				description += "\n"
 			}
 			description += value
+			continue
 		}
 
-		// next securityDefinitions
-		if strings.Index(securityAttr, "@securitydefinitions.") == 0 {
+		// next securityDefinitions or securitySchemes
+		if strings.Index(securityAttr, "@securitydefinitions.") == 0 ||
+			strings.Index(securityAttr, "@securityschemes.") == 0 {
 			// Go back to the previous line and break
 			*index--
 
+			break
+		}
+
+		// If we encounter any other @ annotation that's not related to this security definition, break
+		if strings.HasPrefix(securityAttr, "@") {
+			*index--
 			break
 		}
 	}
@@ -844,32 +922,78 @@ loopline:
 		return nil, fmt.Errorf("%s is %v required", context, search)
 	}
 
-	var scheme *spec.SecurityScheme
+	var secScheme *spec.SecurityScheme
 
 	switch attribute {
+	// Swagger 2.0 legacy support
 	case secAPIKeyAttr:
-		scheme = spec.APIKeyAuth(attrMap[name], attrMap[in])
+		secScheme = spec.APIKeyAuth(attrMap[name], attrMap[in])
 	case secApplicationAttr:
-		scheme = spec.OAuth2Application(attrMap[tokenURL])
+		secScheme = spec.OAuth2Application(attrMap[tokenURL])
 	case secImplicitAttr:
-		scheme = spec.OAuth2Implicit(attrMap[authorizationURL])
+		secScheme = spec.OAuth2Implicit(attrMap[authorizationURL])
 	case secPasswordAttr:
-		scheme = spec.OAuth2Password(attrMap[tokenURL])
+		secScheme = spec.OAuth2Password(attrMap[tokenURL])
 	case secAccessCodeAttr:
-		scheme = spec.OAuth2AccessToken(attrMap[authorizationURL], attrMap[tokenURL])
+		secScheme = spec.OAuth2AccessToken(attrMap[authorizationURL], attrMap[tokenURL])
+
+	// OpenAPI 3.0 support
+	case secHTTPAttr:
+		// For HTTP auth, we use extensions to store OpenAPI 3.0 specific properties
+		schemeValue := attrMap[scheme]
+		if schemeValue == "basic" {
+			// Map to basic auth for compatibility
+			secScheme = spec.BasicAuth()
+			secScheme.AddExtension("x-scheme", schemeValue)
+		} else {
+			// For bearer and other HTTP schemes
+			secScheme = &spec.SecurityScheme{
+				SecuritySchemeProps: spec.SecuritySchemeProps{
+					Type: "http",
+				},
+			}
+			secScheme.AddExtension("x-scheme", schemeValue)
+			if format, ok := optionalFields[bearerFormat]; ok && schemeValue == "bearer" {
+				secScheme.AddExtension("x-bearer-format", format)
+			}
+		}
+	case secAPIKeySchemeAttr:
+		secScheme = spec.APIKeyAuth(attrMap[name], attrMap[in])
+	case secOAuth2AuthCodeAttr:
+		// OAuth2 authorization code flow
+		secScheme = spec.OAuth2AccessToken(attrMap[authorizationURL], attrMap[tokenURL])
+		secScheme.AddExtension("x-oauth2-flow", "authorizationCode")
+	case secOAuth2ClientCredentialsAttr:
+		// OAuth2 client credentials flow (same as application in Swagger 2.0)
+		secScheme = spec.OAuth2Application(attrMap[tokenURL])
+		secScheme.AddExtension("x-oauth2-flow", "clientCredentials")
+	case secOAuth2ImplicitAttr:
+		secScheme = spec.OAuth2Implicit(attrMap[authorizationURL])
+		secScheme.AddExtension("x-oauth2-flow", "implicit")
+	case secOAuth2PasswordAttr:
+		secScheme = spec.OAuth2Password(attrMap[tokenURL])
+		secScheme.AddExtension("x-oauth2-flow", "password")
+	case secOpenIDConnectAttr:
+		// OpenID Connect uses extensions
+		secScheme = &spec.SecurityScheme{
+			SecuritySchemeProps: spec.SecuritySchemeProps{
+				Type: "openIdConnect",
+			},
+		}
+		secScheme.AddExtension("x-openid-connect-url", attrMap[openIDConnectURL])
 	}
 
-	scheme.Description = description
+	secScheme.Description = description
 
 	for extKey, extValue := range extensions {
-		scheme.AddExtension(extKey, extValue)
+		secScheme.AddExtension(extKey, extValue)
 	}
 
 	for scope, scopeDescription := range scopes {
-		scheme.AddScope(scope, scopeDescription)
+		secScheme.AddScope(scope, scopeDescription)
 	}
 
-	return scheme, nil
+	return secScheme, nil
 }
 
 func parseSecurity(commentLine string) map[string][]string {
@@ -1244,6 +1368,48 @@ func processRouterOperation(parser *Parser, operation *Operation) error {
 		}
 
 		parser.swagger.Paths.Paths[routeProperties.Path] = pathItem
+
+		// Also add to public swagger if not private
+		if !operation.Private {
+			var publicPathItem spec.PathItem
+			var publicOk bool
+			publicPathItem, publicOk = parser.publicSwagger.Paths.Paths[routeProperties.Path]
+			if !publicOk {
+				publicPathItem = spec.PathItem{}
+			}
+			publicOp := refRouteMethodOp(&publicPathItem, routeProperties.HTTPMethod)
+			if len(operation.RouterProperties) > 1 {
+				newOp := *operation
+				var validParams []spec.Parameter
+				for _, param := range newOp.Operation.OperationProps.Parameters {
+					if param.In == "path" && !strings.Contains(routeProperties.Path, param.Name) {
+						continue
+					}
+					validParams = append(validParams, param)
+				}
+				newOp.Operation.OperationProps.Parameters = validParams
+				*publicOp = &newOp.Operation
+			} else {
+				// Create a copy of the operation to avoid modifying the original when adding private content
+				operationCopy := operation.Operation
+				*publicOp = &operationCopy
+			}
+			if routeProperties.Deprecated {
+				(*publicOp).Deprecated = routeProperties.Deprecated
+			}
+			parser.publicSwagger.Paths.Paths[routeProperties.Path] = publicPathItem
+		}
+
+		// Add private file content to description in the main swagger (after copying to public swagger)
+		if operation.PrivateFileContent != "" && *op != nil {
+			if (*op).Description != "" {
+				(*op).Description += "\n\n" + operation.PrivateFileContent
+			} else {
+				(*op).Description = operation.PrivateFileContent
+			}
+			// Update the main swagger with modified operation
+			parser.swagger.Paths.Paths[routeProperties.Path] = pathItem
+		}
 	}
 
 	return nil
@@ -2022,6 +2188,121 @@ func walkWith(excludes map[string]struct{}, parseVendor bool) func(path string, 
 // GetSwagger returns *spec.Swagger which is the root document object for the API specification.
 func (parser *Parser) GetSwagger() *spec.Swagger {
 	return parser.swagger
+}
+
+// GetPublicSwagger returns the public swagger object (excludes @Private operations)
+func (parser *Parser) GetPublicSwagger() *spec.Swagger {
+	return parser.publicSwagger
+}
+
+// HasPrivateOperations checks if there are any @Private operations in the API
+func (parser *Parser) HasPrivateOperations() bool {
+	// Compare the number of paths/operations between main swagger and public swagger
+	mainPaths := len(parser.swagger.Paths.Paths)
+	publicPaths := len(parser.publicSwagger.Paths.Paths)
+
+	// If they differ, we have private operations
+	if mainPaths != publicPaths {
+		return true
+	}
+
+	// Also check individual operations within paths
+	for path, mainPathItem := range parser.swagger.Paths.Paths {
+		publicPathItem, exists := parser.publicSwagger.Paths.Paths[path]
+		if !exists {
+			continue // This should not happen given the above check
+		}
+
+		// Count operations in main path item
+		mainOps := 0
+		if mainPathItem.Get != nil {
+			mainOps++
+		}
+		if mainPathItem.Post != nil {
+			mainOps++
+		}
+		if mainPathItem.Put != nil {
+			mainOps++
+		}
+		if mainPathItem.Delete != nil {
+			mainOps++
+		}
+		if mainPathItem.Patch != nil {
+			mainOps++
+		}
+		if mainPathItem.Options != nil {
+			mainOps++
+		}
+		if mainPathItem.Head != nil {
+			mainOps++
+		}
+
+		// Count operations in public path item
+		publicOps := 0
+		if publicPathItem.Get != nil {
+			publicOps++
+		}
+		if publicPathItem.Post != nil {
+			publicOps++
+		}
+		if publicPathItem.Put != nil {
+			publicOps++
+		}
+		if publicPathItem.Delete != nil {
+			publicOps++
+		}
+		if publicPathItem.Patch != nil {
+			publicOps++
+		}
+		if publicPathItem.Options != nil {
+			publicOps++
+		}
+		if publicPathItem.Head != nil {
+			publicOps++
+		}
+
+		if mainOps != publicOps {
+			return true
+		}
+	}
+
+	return false
+}
+
+// copyGeneralAPIInfoToPublicSwagger copies all general API info from main swagger to public swagger
+func (parser *Parser) copyGeneralAPIInfoToPublicSwagger() {
+	// Copy swagger version
+	parser.publicSwagger.Swagger = parser.swagger.Swagger
+
+	// Copy Info object
+	if parser.swagger.Info != nil {
+		parser.publicSwagger.Info = &spec.Info{
+			VendorExtensible: parser.swagger.Info.VendorExtensible,
+			InfoProps: spec.InfoProps{
+				Description:    parser.swagger.Info.Description,
+				Title:          parser.swagger.Info.Title,
+				TermsOfService: parser.swagger.Info.TermsOfService,
+				Contact:        parser.swagger.Info.Contact,
+				License:        parser.swagger.Info.License,
+				Version:        parser.swagger.Info.Version,
+			},
+		}
+	}
+
+	// Copy other metadata
+	parser.publicSwagger.Host = parser.swagger.Host
+	parser.publicSwagger.BasePath = parser.swagger.BasePath
+	parser.publicSwagger.Schemes = parser.swagger.Schemes
+	parser.publicSwagger.Consumes = parser.swagger.Consumes
+	parser.publicSwagger.Produces = parser.swagger.Produces
+	parser.publicSwagger.SecurityDefinitions = parser.swagger.SecurityDefinitions
+	parser.publicSwagger.Security = parser.swagger.Security
+	parser.publicSwagger.Tags = parser.swagger.Tags
+	parser.publicSwagger.ExternalDocs = parser.swagger.ExternalDocs
+	parser.publicSwagger.Definitions = parser.swagger.Definitions
+	parser.publicSwagger.Parameters = parser.swagger.Parameters
+	parser.publicSwagger.Responses = parser.swagger.Responses
+	parser.publicSwagger.Extensions = parser.swagger.Extensions
 }
 
 // addTestType just for tests.

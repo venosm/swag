@@ -174,7 +174,8 @@ import "github.com/venosm/swag-files" // swagger embed files
 // @host      localhost:8080
 // @BasePath  /api/v1
 
-// @securityDefinitions.basic  BasicAuth
+// @securitySchemes.http BasicAuth
+// @scheme basic
 
 // @externalDocs.description  OpenAPI
 // @externalDocs.url          https://swagger.io/resources/open-api/
@@ -386,6 +387,8 @@ When a short string in your documentation is insufficient, or you need images, c
 | x-name               | The extension key, must be start by x- and take only json value.                                                                                                                                  |
 | x-codeSample         | Optional Markdown usage. take `file` as parameter. This will then search for a file named like the summary in the given folder.                                                                   |
 | deprecated           | Mark endpoint as deprecated.                                                                                                                                                                      |
+| private              | Mark endpoint as private. Private endpoints are excluded from public documentation but included in private documentation.                                                                           |
+| privateFile          | Load content from file only into private documentation. Similar to @file but content appears only in docs_private directory.                                                                      |
 
 
 
@@ -430,6 +433,22 @@ Besides that, `swag` also accepts aliases for some MIME Types as follows:
 - user defined struct
 
 ## Security
+
+### OpenAPI 3.0 Security Schemes (Recommended)
+
+| annotation | description | parameters | example |
+|------------|-------------|------------|---------|
+| securitySchemes.http  | [HTTP authentication](https://swagger.io/docs/specification/authentication/) including Basic and Bearer  | scheme, bearerFormat (optional), description | // @securitySchemes.http BasicAuth<br>// @scheme basic |
+| securitySchemes.http  | Bearer token authentication | scheme, bearerFormat (optional), description | // @securitySchemes.http BearerAuth<br>// @scheme bearer<br>// @bearerFormat JWT |
+| securitySchemes.apikey | [API key](https://swagger.io/docs/specification/authentication/api-keys/) auth  | in, name, description | // @securitySchemes.apikey ApiKeyAuth<br>// @in header<br>// @name X-API-Key |
+| securitySchemes.openidconnect | [OpenID Connect](https://swagger.io/docs/specification/authentication/openid-connect-discovery/) Discovery | openidConnectUrl, description | // @securitySchemes.openidconnect OpenIDConnect<br>// @openidConnectUrl https://example.com/.well-known/openid-configuration |
+| securitySchemes.oauth2.authorizationCode | [OAuth2 authorization code](https://swagger.io/docs/specification/authentication/oauth2/) flow | tokenUrl, authorizationUrl, scope, description | // @securitySchemes.oauth2.authorizationCode OAuth2AuthCode<br>// @tokenUrl https://example.com/oauth/token<br>// @authorizationUrl https://example.com/oauth/authorize |
+| securitySchemes.oauth2.implicit | [OAuth2 implicit](https://swagger.io/docs/specification/authentication/oauth2/) flow | authorizationUrl, scope, description | // @securitySchemes.oauth2.implicit OAuth2Implicit<br>// @authorizationUrl https://example.com/oauth/authorize |
+| securitySchemes.oauth2.password | [OAuth2 password](https://swagger.io/docs/specification/authentication/oauth2/) flow | tokenUrl, scope, description | // @securitySchemes.oauth2.password OAuth2Password<br>// @tokenUrl https://example.com/oauth/token |
+| securitySchemes.oauth2.clientCredentials | [OAuth2 client credentials](https://swagger.io/docs/specification/authentication/oauth2/) flow | tokenUrl, scope, description | // @securitySchemes.oauth2.clientCredentials OAuth2ClientCredentials<br>// @tokenUrl https://example.com/oauth/token |
+
+### Swagger 2.0 Security Definitions (Legacy - Backward Compatible)
+
 | annotation | description | parameters | example |
 |------------|-------------|------------|---------|
 | securitydefinitions.basic  | [Basic](https://swagger.io/docs/specification/2-0/authentication/basic-authentication/) auth.  |                                   | // @securityDefinitions.basic BasicAuth                      |
@@ -439,13 +458,17 @@ Besides that, `swag` also accepts aliases for some MIME Types as follows:
 | securitydefinitions.oauth2.password     | [OAuth2 password](https://swagger.io/docs/specification/authentication/oauth2/) auth.          | tokenUrl, scope, description                   | // @securitydefinitions.oauth2.password OAuth2Password       |
 | securitydefinitions.oauth2.accessCode   | [OAuth2 access code](https://swagger.io/docs/specification/authentication/oauth2/) auth.       | tokenUrl, authorizationUrl, scope, description | // @securitydefinitions.oauth2.accessCode OAuth2AccessCode   |
 
+### Security Parameters
 
 | parameters annotation           | example                                                                 |
 |---------------------------------|-------------------------------------------------------------------------|
 | in                              | // @in header                                                           |
 | name                            | // @name Authorization                                                  |
+| scheme                          | // @scheme basic<br>// @scheme bearer                                   |
+| bearerFormat                    | // @bearerFormat JWT                                                    |
 | tokenUrl                        | // @tokenUrl https://example.com/oauth/token                            |
-| authorizationurl                | // @authorizationurl https://example.com/oauth/authorize                |
+| authorizationUrl                | // @authorizationUrl https://example.com/oauth/authorize                |
+| openidConnectUrl                | // @openidConnectUrl https://example.com/.well-known/openid-configuration |
 | scope.hoge                      | // @scope.write Grants write access                                     |
 | description                     | // @description OAuth protects our entity endpoints                     |
 
@@ -735,7 +758,65 @@ type Resp struct {
 
 ### How to use security annotations
 
-General API info.
+#### OpenAPI 3.0 Style (Recommended)
+
+General API info - Define security schemes:
+
+```go
+// HTTP Basic Authentication
+// @securitySchemes.http BasicAuth
+// @scheme basic
+// @description Enter your username and password
+
+// HTTP Bearer Authentication (JWT)
+// @securitySchemes.http BearerAuth
+// @scheme bearer
+// @bearerFormat JWT
+// @description Enter your bearer token
+
+// API Key Authentication
+// @securitySchemes.apikey ApiKeyAuth
+// @in header
+// @name X-API-Key
+// @description Enter your API key
+
+// OAuth2 Authorization Code Flow
+// @securitySchemes.oauth2.authorizationCode OAuth2
+// @tokenUrl https://example.com/oauth/token
+// @authorizationUrl https://example.com/oauth/authorize
+// @scope.read Grants read access
+// @scope.write Grants write access
+// @scope.admin Grants read and write access to administrative information
+
+// OpenID Connect
+// @securitySchemes.openidconnect OpenIDConnect
+// @openidConnectUrl https://example.com/.well-known/openid-configuration
+// @description OpenID Connect authentication
+```
+
+Apply security to API operations:
+
+```go
+// @Security BearerAuth
+```
+
+Make it OR condition (user can authenticate with either method):
+
+```go
+// @Security BearerAuth
+// @Security ApiKeyAuth
+```
+
+Make it AND condition (user must authenticate with both methods):
+
+```go
+// @Security BearerAuth && ApiKeyAuth
+// @Security OAuth2[read, write] && ApiKeyAuth
+```
+
+#### Swagger 2.0 Style (Legacy - Still Supported)
+
+General API info:
 
 ```go
 // @securityDefinitions.basic BasicAuth
@@ -746,20 +827,20 @@ General API info.
 // @scope.admin Grants read and write access to administrative information
 ```
 
-Each API operation.
+Each API operation:
 
 ```go
 // @Security ApiKeyAuth
 ```
 
-Make it OR condition
+Make it OR condition:
 
 ```go
 // @Security ApiKeyAuth
 // @Security OAuth2Application[write, admin]
 ```
 
-Make it AND condition
+Make it AND condition:
 
 ```go
 // @Security ApiKeyAuth && firebase
@@ -850,4 +931,66 @@ if you want to include both internal and from dependencies use both flags
 ```
 swag init --parseDependency --parseInternal
 ```
+
+### Private Documentation Support
+
+The swag tool supports generating separate documentation for public and private APIs using `@private` and `@privateFile` annotations.
+
+When private operations are detected, two documentation directories are generated:
+- `docs/` - Contains only public endpoints (excludes @private endpoints)
+- `docs_private/` - Contains all endpoints including private ones
+
+#### Mark endpoint as private
+
+```go
+// GetInternalData godoc
+// @Summary      Get internal data
+// @Description  This endpoint is for internal use only
+// @Tags         internal
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  model.InternalData
+// @Router       /internal/data [get]
+// @private
+func (c *Controller) GetInternalData(ctx *gin.Context) {
+    // Implementation for internal endpoint
+}
+```
+
+#### Load private content from file
+
+Create a file with sensitive documentation content and reference it with `@privateFile`:
+
+**internal_auth.md:**
+```markdown
+# Internal Authentication
+
+This endpoint requires special authentication:
+1. Valid API key with admin privileges
+2. VPN connection required
+3. Rate limited to 10 requests per minute
+
+## Security Notes
+- This endpoint exposes sensitive user data
+- Only for internal tooling
+- Logs all access attempts
+```
+
+**Controller code:**
+```go
+// GetUserData godoc
+// @Summary      Get user data
+// @Description  Basic endpoint for user data
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Success      200  {object}  model.UserData
+// @Router       /users/{id} [get]
+// @privateFile  internal_auth.md
+func (c *Controller) GetUserData(ctx *gin.Context) {
+    // Implementation
+}
+```
+
+The content from `internal_auth.md` will be appended to the endpoint description only in `docs_private/` documentation, while `docs/` will contain only the basic description.
 

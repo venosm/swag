@@ -227,21 +227,109 @@ func (g *Gen) Build(config *Config) error {
 	}
 
 	swagger := p.GetSwagger()
+	hasPrivateOperations := p.HasPrivateOperations()
 
-	if err := os.MkdirAll(config.OutputDir, os.ModePerm); err != nil {
+	if hasPrivateOperations {
+		// Generate docs_private directory with all operations (including @Private)
+		privateOutputDir := config.OutputDir + "_private"
+		if err := os.MkdirAll(privateOutputDir, os.ModePerm); err != nil {
+			return err
+		}
+
+		privateConfig := *config
+		privateConfig.OutputDir = privateOutputDir
+
+		for _, outputType := range config.OutputTypes {
+			outputType = strings.ToLower(strings.TrimSpace(outputType))
+			if typeWriter, ok := g.outputTypeMap[outputType]; ok {
+				if outputType == "go" {
+					// For Go files, use special handling to change InstanceName without affecting filenames
+					if err := g.writeDocSwaggerWithInstanceName(&privateConfig, swagger, privateConfig.InstanceName+"Private"); err != nil {
+						return err
+					}
+				} else {
+					if err := typeWriter(&privateConfig, swagger); err != nil {
+						return err
+					}
+				}
+			} else {
+				log.Printf("output type '%s' not supported", outputType)
+			}
+		}
+
+		// Generate docs directory with only public operations (excluding @Private)
+		publicSwagger := p.GetPublicSwagger()
+		if err := os.MkdirAll(config.OutputDir, os.ModePerm); err != nil {
+			return err
+		}
+
+		for _, outputType := range config.OutputTypes {
+			outputType = strings.ToLower(strings.TrimSpace(outputType))
+			if typeWriter, ok := g.outputTypeMap[outputType]; ok {
+				if err := typeWriter(config, publicSwagger); err != nil {
+					return err
+				}
+			} else {
+				log.Printf("output type '%s' not supported", outputType)
+			}
+		}
+	} else {
+		// No private operations found, generate normally (backward compatibility)
+		if err := os.MkdirAll(config.OutputDir, os.ModePerm); err != nil {
+			return err
+		}
+
+		for _, outputType := range config.OutputTypes {
+			outputType = strings.ToLower(strings.TrimSpace(outputType))
+			if typeWriter, ok := g.outputTypeMap[outputType]; ok {
+				if err := typeWriter(config, swagger); err != nil {
+					return err
+				}
+			} else {
+				log.Printf("output type '%s' not supported", outputType)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (g *Gen) writeDocSwaggerWithInstanceName(config *Config, swagger *spec.Swagger, instanceName string) error {
+	var filename = "docs.go"
+
+	if config.State != "" {
+		filename = config.State + "_" + filename
+	}
+
+	// Don't modify filename based on instanceName - keep it simple
+	docFileName := path.Join(config.OutputDir, filename)
+
+	absOutputDir, err := filepath.Abs(config.OutputDir)
+	if err != nil {
 		return err
 	}
 
-	for _, outputType := range config.OutputTypes {
-		outputType = strings.ToLower(strings.TrimSpace(outputType))
-		if typeWriter, ok := g.outputTypeMap[outputType]; ok {
-			if err := typeWriter(config, swagger); err != nil {
-				return err
-			}
-		} else {
-			log.Printf("output type '%s' not supported", outputType)
-		}
+	var packageName string
+	if len(config.PackageName) > 0 {
+		packageName = config.PackageName
+	} else {
+		packageName = filepath.Base(absOutputDir)
+		packageName = strings.ReplaceAll(packageName, "-", "_")
 	}
+
+	docs, err := os.Create(docFileName)
+	if err != nil {
+		return err
+	}
+	defer docs.Close()
+
+	// Write doc with custom instance name
+	err = g.writeGoDocWithInstanceName(packageName, docs, swagger, config, instanceName)
+	if err != nil {
+		return err
+	}
+
+	g.debug.Printf("create docs.go at %+v", docFileName)
 
 	return nil
 }
@@ -489,7 +577,7 @@ func parseOverrides(r io.Reader) (map[string]string, error) {
 	return overrides, nil
 }
 
-func (g *Gen) writeGoDoc(packageName string, output io.Writer, swagger *spec.Swagger, config *Config) error {
+func (g *Gen) writeGoDocWithInstanceName(packageName string, output io.Writer, swagger *spec.Swagger, config *Config, instanceName string) error {
 	generator, err := template.New("swagger_info").Funcs(
 		template.FuncMap{
 			"printDoc": func(v string) string {
@@ -591,7 +679,7 @@ func (g *Gen) writeGoDoc(packageName string, output io.Writer, swagger *spec.Swa
 			Description:        swagger.Info.Description,
 			Version:            swagger.Info.Version,
 			State:              state,
-			InstanceName:       config.InstanceName,
+			InstanceName:       instanceName, // Use custom instance name
 			LeftTemplateDelim:  config.LeftTemplateDelim,
 			RightTemplateDelim: config.RightTemplateDelim,
 		},
@@ -608,6 +696,10 @@ func (g *Gen) writeGoDoc(packageName string, output io.Writer, swagger *spec.Swa
 	return err
 }
 
+func (g *Gen) writeGoDoc(packageName string, output io.Writer, swagger *spec.Swagger, config *Config) error {
+	return g.writeGoDocWithInstanceName(packageName, output, swagger, config, config.InstanceName)
+}
+
 // convertToOpenAPI3 converts Swagger 2.0 JSON to OpenAPI 3.0 format
 func (g *Gen) convertToOpenAPI3(input []byte) ([]byte, error) {
 	var doc map[string]interface{}
@@ -621,41 +713,48 @@ func (g *Gen) convertToOpenAPI3(input []byte) ([]byte, error) {
 		delete(doc, "swagger")
 	}
 
-	schemes, hasSchemes := doc["schemes"]
-	// Convert host + basePath to servers
-	if host, hasHost := doc["host"]; hasHost {
-		if basePath, hasBasePath := doc["basePath"]; hasBasePath {
-			var servers []map[string]interface{}
-
-			if hasSchemes {
-				for _, s := range schemes.([]interface{}) {
-					servers = append(servers, map[string]interface{}{"url": fmt.Sprintf("%s://%s%s", s, host, basePath)})
-				}
-			} else {
-				servers = append(servers, map[string]interface{}{"url": fmt.Sprintf("https://%s%s", host, basePath)})
+	_, hasSchemes := doc["schemes"]
+	// Convert host + basePath to servers using template variables for runtime substitution
+	// Use {{.Scheme}} to allow dynamic scheme selection at runtime
+	if _, hasHost := doc["host"]; hasHost {
+		if _, hasBasePath := doc["basePath"]; hasBasePath {
+			// Create single server with dynamic scheme template variable
+			servers := []map[string]interface{}{
+				{"url": "{{.Scheme}}://{{.Host}}{{.BasePath}}"},
 			}
-
 			doc["servers"] = servers
 		} else {
 			servers := []map[string]interface{}{
-				{
-					"url": fmt.Sprintf("https://%s", host),
-				},
+				{"url": "{{.Scheme}}://{{.Host}}"},
 			}
-
 			doc["servers"] = servers
 		}
 		delete(doc, "host")
 		delete(doc, "basePath")
 	}
 
+	// Always remove schemes in OpenAPI 3.0 (even if no host/basePath)
+	if hasSchemes {
+		delete(doc, "schemes")
+	}
+
 	// Convert definitions to components.schemas
+	components := make(map[string]interface{})
 	if definitions, ok := doc["definitions"]; ok {
-		components := map[string]interface{}{
-			"schemas": definitions,
-		}
-		doc["components"] = components
+		components["schemas"] = definitions
 		delete(doc, "definitions")
+	}
+
+	// Convert securityDefinitions to components.securitySchemes with OpenAPI 3.0 format
+	if securityDefs, ok := doc["securityDefinitions"].(map[string]interface{}); ok {
+		convertedSchemes := g.convertSecuritySchemesToOpenAPI3(securityDefs)
+		components["securitySchemes"] = convertedSchemes
+		delete(doc, "securityDefinitions")
+	}
+
+	// Only add components if not empty
+	if len(components) > 0 {
+		doc["components"] = components
 	}
 
 	// Convert paths structure
@@ -673,6 +772,127 @@ func (g *Gen) convertToOpenAPI3(input []byte) ([]byte, error) {
 	return json.MarshalIndent(doc, "", "    ")
 }
 
+// convertSecuritySchemesToOpenAPI3 converts Swagger 2.0 security definitions to OpenAPI 3.0 security schemes
+func (g *Gen) convertSecuritySchemesToOpenAPI3(securityDefs map[string]interface{}) map[string]interface{} {
+	converted := make(map[string]interface{})
+
+	for name, schemeDef := range securityDefs {
+		if schemeMap, ok := schemeDef.(map[string]interface{}); ok {
+			convertedScheme := g.convertSingleSecurityScheme(schemeMap)
+			converted[name] = convertedScheme
+		}
+	}
+
+	return converted
+}
+
+// convertSingleSecurityScheme converts a single security scheme to OpenAPI 3.0 format
+func (g *Gen) convertSingleSecurityScheme(scheme map[string]interface{}) map[string]interface{} {
+	schemeType, _ := scheme["type"].(string)
+	converted := make(map[string]interface{})
+
+	switch schemeType {
+	case "basic":
+		// Swagger 2.0: type: basic
+		// OpenAPI 3.0: type: http, scheme: basic
+		converted["type"] = "http"
+		converted["scheme"] = "basic"
+		if desc, ok := scheme["description"]; ok {
+			converted["description"] = desc
+		}
+
+	case "http":
+		// Already OpenAPI 3.0 style, but need to move x-scheme to scheme
+		converted["type"] = "http"
+		if xScheme, ok := scheme["x-scheme"]; ok {
+			converted["scheme"] = xScheme
+		}
+		if xBearerFormat, ok := scheme["x-bearer-format"]; ok {
+			converted["bearerFormat"] = xBearerFormat
+		}
+		if desc, ok := scheme["description"]; ok {
+			converted["description"] = desc
+		}
+
+	case "apiKey":
+		// apiKey stays the same in OpenAPI 3.0
+		converted["type"] = "apiKey"
+		if name, ok := scheme["name"]; ok {
+			converted["name"] = name
+		}
+		if in, ok := scheme["in"]; ok {
+			converted["in"] = in
+		}
+		if desc, ok := scheme["description"]; ok {
+			converted["description"] = desc
+		}
+
+	case "oauth2":
+		// Swagger 2.0: type: oauth2, flow: accessCode/implicit/password/application
+		// OpenAPI 3.0: type: oauth2, flows: { authorizationCode/implicit/password/clientCredentials: {...} }
+		converted["type"] = "oauth2"
+		flows := make(map[string]interface{})
+
+		flow, _ := scheme["flow"].(string)
+		flowConfig := make(map[string]interface{})
+
+		// Map Swagger 2.0 flow names to OpenAPI 3.0
+		var flowName string
+		switch flow {
+		case "accessCode":
+			flowName = "authorizationCode"
+		case "application":
+			flowName = "clientCredentials"
+		case "implicit":
+			flowName = "implicit"
+		case "password":
+			flowName = "password"
+		default:
+			// Check x-oauth2-flow extension for OpenAPI 3.0 flow name
+			if xFlow, ok := scheme["x-oauth2-flow"].(string); ok {
+				flowName = xFlow
+			} else {
+				flowName = flow
+			}
+		}
+
+		if authURL, ok := scheme["authorizationUrl"]; ok {
+			flowConfig["authorizationUrl"] = authURL
+		}
+		if tokenURL, ok := scheme["tokenUrl"]; ok {
+			flowConfig["tokenUrl"] = tokenURL
+		}
+		if scopes, ok := scheme["scopes"]; ok {
+			flowConfig["scopes"] = scopes
+		} else {
+			flowConfig["scopes"] = make(map[string]interface{})
+		}
+
+		flows[flowName] = flowConfig
+		converted["flows"] = flows
+
+		if desc, ok := scheme["description"]; ok {
+			converted["description"] = desc
+		}
+
+	case "openIdConnect":
+		// OpenID Connect
+		converted["type"] = "openIdConnect"
+		if xURL, ok := scheme["x-openid-connect-url"]; ok {
+			converted["openIdConnectUrl"] = xURL
+		}
+		if desc, ok := scheme["description"]; ok {
+			converted["description"] = desc
+		}
+
+	default:
+		// Unknown type, copy as-is
+		return scheme
+	}
+
+	return converted
+}
+
 func (g *Gen) convertPathsToOpenAPI3(paths map[string]interface{}) {
 	for _, pathValue := range paths {
 		if pathObj, ok := pathValue.(map[string]interface{}); ok {
@@ -686,8 +906,27 @@ func (g *Gen) convertPathsToOpenAPI3(paths map[string]interface{}) {
 }
 
 func (g *Gen) convertOperationToOpenAPI3(operation map[string]interface{}) {
+	// First, collect formData parameters to convert to requestBody
+	var formDataParams []map[string]interface{}
+	var hasBodyParam bool
+
+	if parameters, hasParams := operation["parameters"].([]interface{}); hasParams {
+		for _, param := range parameters {
+			if paramObj, ok := param.(map[string]interface{}); ok {
+				if paramObj["in"] == "formData" {
+					formDataParams = append(formDataParams, paramObj)
+				} else if paramObj["in"] == "body" {
+					hasBodyParam = true
+				}
+			}
+		}
+	}
+
 	// Convert consumes to requestBody
-	if consumes, ok := operation["consumes"].([]interface{}); ok {
+	consumes, hasConsumes := operation["consumes"].([]interface{})
+
+	// Handle body parameters
+	if hasConsumes && hasBodyParam {
 		if parameters, hasParams := operation["parameters"].([]interface{}); hasParams {
 			for _, param := range parameters {
 				if paramObj, ok := param.(map[string]interface{}); ok {
@@ -707,30 +946,117 @@ func (g *Gen) convertOperationToOpenAPI3(operation map[string]interface{}) {
 						}
 
 						operation["requestBody"] = requestBody
-
-						// Remove body parameter from parameters array
-						if params, ok := operation["parameters"].([]interface{}); ok {
-							newParams := []interface{}{}
-							for _, p := range params {
-								if pObj, ok := p.(map[string]interface{}); ok {
-									if pObj["in"] != "body" {
-										// Convert parameter structure for OpenAPI 3.0
-										g.convertParameterToOpenAPI3(pObj)
-										newParams = append(newParams, pObj)
-									}
-								}
-							}
-							if len(newParams) > 0 {
-								operation["parameters"] = newParams
-							} else {
-								delete(operation, "parameters")
-							}
-						}
 						break
 					}
 				}
 			}
 		}
+	}
+
+	// Handle formData parameters - convert to requestBody
+	if len(formDataParams) > 0 {
+		// Determine content type from consumes or default to multipart/form-data
+		var contentTypes []string
+		if hasConsumes {
+			for _, consume := range consumes {
+				if consumeStr, ok := consume.(string); ok {
+					// Only use form-related content types
+					if consumeStr == "multipart/form-data" || consumeStr == "application/x-www-form-urlencoded" {
+						contentTypes = append(contentTypes, consumeStr)
+					}
+				}
+			}
+		}
+		// Default to multipart/form-data if no form content type specified
+		if len(contentTypes) == 0 {
+			contentTypes = []string{"multipart/form-data"}
+		}
+
+		// Build schema from formData parameters
+		properties := make(map[string]interface{})
+		required := []string{}
+
+		for _, paramObj := range formDataParams {
+			paramName, _ := paramObj["name"].(string)
+			paramSchema := make(map[string]interface{})
+
+			// Handle file type
+			if paramType, ok := paramObj["type"].(string); ok {
+				if paramType == "file" {
+					paramSchema["type"] = "string"
+					paramSchema["format"] = "binary"
+				} else {
+					paramSchema["type"] = paramType
+					// Copy other type-related fields
+					for _, field := range []string{"format", "enum", "minimum", "maximum", "minLength", "maxLength", "pattern", "items", "default"} {
+						if value, exists := paramObj[field]; exists {
+							paramSchema[field] = value
+						}
+					}
+				}
+			}
+
+			if description, ok := paramObj["description"]; ok {
+				paramSchema["description"] = description
+			}
+
+			properties[paramName] = paramSchema
+
+			// Track required fields
+			if isRequired, ok := paramObj["required"].(bool); ok && isRequired {
+				required = append(required, paramName)
+			}
+		}
+
+		// Create requestBody schema
+		schema := map[string]interface{}{
+			"type":       "object",
+			"properties": properties,
+		}
+		if len(required) > 0 {
+			schema["required"] = required
+		}
+
+		// Create requestBody with all applicable content types
+		requestBody := map[string]interface{}{
+			"content": map[string]interface{}{},
+		}
+
+		// Determine if requestBody is required (if any formData param is required)
+		if len(required) > 0 {
+			requestBody["required"] = true
+		}
+
+		content := requestBody["content"].(map[string]interface{})
+		for _, contentType := range contentTypes {
+			content[contentType] = map[string]interface{}{
+				"schema": schema,
+			}
+		}
+
+		operation["requestBody"] = requestBody
+	}
+
+	// Remove body and formData parameters from parameters array
+	if parameters, hasParams := operation["parameters"].([]interface{}); hasParams {
+		newParams := []interface{}{}
+		for _, p := range parameters {
+			if pObj, ok := p.(map[string]interface{}); ok {
+				if pObj["in"] != "body" && pObj["in"] != "formData" {
+					// Convert parameter structure for OpenAPI 3.0
+					g.convertParameterToOpenAPI3(pObj)
+					newParams = append(newParams, pObj)
+				}
+			}
+		}
+		if len(newParams) > 0 {
+			operation["parameters"] = newParams
+		} else {
+			delete(operation, "parameters")
+		}
+	}
+
+	if hasConsumes {
 		delete(operation, "consumes")
 	}
 

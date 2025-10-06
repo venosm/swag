@@ -33,15 +33,26 @@
             "post": {
                 "description": "Upload file",
                 "operationId": "file.upload",
-                "parameters": [
-                    {
-                        "description": "this is a test file",
-                        "in": "formData",
-                        "name": "file",
-                        "required": true,
-                        "type": "file"
-                    }
-                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "properties": {
+                                    "file": {
+                                        "description": "this is a test file",
+                                        "format": "binary",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "file"
+                                ],
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "responses": {
                     "200": {
                         "content": {

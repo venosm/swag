@@ -30,8 +30,10 @@ type Operation struct {
 	parser              *Parser
 	codeExampleFilesDir string
 	spec.Operation
-	RouterProperties []RouteProperties
-	State            string
+	RouterProperties   []RouteProperties
+	State              string
+	Private            bool
+	PrivateFileContent string
 }
 
 var mimeTypeAliases = map[string]string{
@@ -124,6 +126,20 @@ func (operation *Operation) ParseComment(comment string, astFile *ast.File) erro
 	switch lowerAttribute {
 	case stateAttr:
 		operation.ParseStateComment(lineRemainder)
+	case privateAttr:
+		operation.Private = true
+	case privateFileAttr:
+		// Extract file path from "@privateFile ./path/to/file.md"
+		if lineRemainder == "" {
+			return fmt.Errorf("@privateFile directive requires a file path")
+		}
+		filePath := strings.TrimSpace(lineRemainder)
+		// Load content from markdown file and store it for private docs only
+		commentInfo, err := getMarkdownFromFile(filePath, operation.parser.searchDir)
+		if err != nil {
+			return err
+		}
+		operation.PrivateFileContent = string(commentInfo)
 	case descriptionAttr:
 		// Check if value starts with @file directive
 		if strings.HasPrefix(strings.TrimSpace(lineRemainder), "@file") {

@@ -1,83 +1,266 @@
 {
-    "openapi": "3.0.0",
+    "components": {
+        "schemas": {
+            "web.APIError": {
+                "properties": {
+                    "createdAt": {
+                        "type": "string"
+                    },
+                    "errorCode": {
+                        "type": "integer"
+                    },
+                    "errorMessage": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "web.Pet": {
+                "properties": {
+                    "category": {
+                        "properties": {
+                            "id": {
+                                "example": 1,
+                                "type": "integer"
+                            },
+                            "name": {
+                                "example": "category_name",
+                                "type": "string"
+                            },
+                            "photoURLs": {
+                                "example": [
+                                    "http://test/image/1.jpg",
+                                    "http://test/image/2.jpg"
+                                ],
+                                "items": {
+                                    "format": "url",
+                                    "type": "string"
+                                },
+                                "type": "array"
+                            },
+                            "smallCategory": {
+                                "properties": {
+                                    "id": {
+                                        "example": 1,
+                                        "type": "integer"
+                                    },
+                                    "name": {
+                                        "example": "detail_category_name",
+                                        "type": "string"
+                                    },
+                                    "photoURLs": {
+                                        "example": [
+                                            "http://test/image/1.jpg",
+                                            "http://test/image/2.jpg"
+                                        ],
+                                        "items": {
+                                            "type": "string"
+                                        },
+                                        "type": "array"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "data": {},
+                    "decimal": {
+                        "type": "number"
+                    },
+                    "id": {
+                        "example": 1,
+                        "format": "int64",
+                        "type": "integer"
+                    },
+                    "isAlive": {
+                        "example": true,
+                        "type": "boolean"
+                    },
+                    "name": {
+                        "example": "poti",
+                        "type": "string"
+                    },
+                    "pets": {
+                        "items": {
+                            "$ref": "#/components/schemas/web.Pet2"
+                        },
+                        "type": "array"
+                    },
+                    "pets2": {
+                        "items": {
+                            "$ref": "#/components/schemas/web.Pet2"
+                        },
+                        "type": "array"
+                    },
+                    "photoURLs": {
+                        "example": [
+                            "http://test/image/1.jpg",
+                            "http://test/image/2.jpg"
+                        ],
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array"
+                    },
+                    "price": {
+                        "example": 3.25,
+                        "multipleOf": 0.01,
+                        "type": "number"
+                    },
+                    "status": {
+                        "type": "string"
+                    },
+                    "tags": {
+                        "items": {
+                            "$ref": "#/components/schemas/web.Tag"
+                        },
+                        "type": "array"
+                    },
+                    "uuid": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "web.Pet2": {
+                "properties": {
+                    "deletedAt": {
+                        "type": "string"
+                    },
+                    "id": {
+                        "type": "integer"
+                    },
+                    "middleName": {
+                        "type": "string"
+                    }
+                },
+                "type": "object"
+            },
+            "web.RevValue": {
+                "properties": {
+                    "data": {
+                        "type": "integer"
+                    },
+                    "err": {
+                        "format": "int32",
+                        "type": "integer"
+                    },
+                    "status": {
+                        "type": "boolean"
+                    }
+                },
+                "type": "object"
+            },
+            "web.Tag": {
+                "properties": {
+                    "id": {
+                        "format": "int64",
+                        "type": "integer"
+                    },
+                    "name": {
+                        "type": "string"
+                    },
+                    "pets": {
+                        "items": {
+                            "$ref": "#/components/schemas/web.Pet"
+                        },
+                        "type": "array"
+                    }
+                },
+                "type": "object"
+            }
+        }
+    },
     "info": {
-        "description": "This is a sample server Petstore server.",
-        "title": "Swagger Example API",
-        "termsOfService": "http://swagger.io/terms/",
         "contact": {
+            "email": "support@swagger.io",
             "name": "API Support",
-            "url": "http://www.swagger.io/support",
-            "email": "support@swagger.io"
+            "url": "http://www.swagger.io/support"
         },
+        "description": "This is a sample server Petstore server.",
         "license": {
             "name": "Apache 2.0",
             "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
         },
+        "termsOfService": "http://swagger.io/terms/",
+        "title": "Swagger Example API",
         "version": "1.0"
     },
+    "openapi": "3.0.0",
     "paths": {
         "/file/upload": {
             "post": {
                 "description": "Upload file",
-                "summary": "Upload file",
                 "operationId": "file.upload",
-                "parameters": [
-                    {
-                        "type": "file",
-                        "description": "this is a test file",
-                        "name": "file",
-                        "in": "formData",
-                        "required": true
-                    }
-                ],
+                "requestBody": {
+                    "content": {
+                        "multipart/form-data": {
+                            "schema": {
+                                "properties": {
+                                    "file": {
+                                        "description": "this is a test file",
+                                        "format": "binary",
+                                        "type": "string"
+                                    }
+                                },
+                                "required": [
+                                    "file"
+                                ],
+                                "type": "object"
+                            }
+                        }
+                    },
+                    "required": true
+                },
                 "responses": {
                     "200": {
-                        "description": "ok",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "type": "string"
                                 }
                             }
-                        }
+                        },
+                        "description": "ok"
                     },
                     "400": {
-                        "description": "We need ID!!",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/web.APIError"
                                 }
                             }
-                        }
+                        },
+                        "description": "We need ID!!"
                     },
                     "404": {
-                        "description": "Can not find ID",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/web.APIError"
                                 }
                             }
-                        }
+                        },
+                        "description": "Can not find ID"
                     }
-                }
+                },
+                "summary": "Upload file"
             }
         },
         "/testapi/get-string-by-int/{some_id}": {
             "get": {
                 "description": "get string by ID",
-                "summary": "Add a new pet to the store",
                 "operationId": "get-string-by-int",
                 "parameters": [
                     {
                         "description": "Some ID",
-                        "name": "some_id",
                         "in": "path",
+                        "name": "some_id",
                         "required": true,
                         "schema": {
-                            "type": "integer",
-                            "format": "int64"
+                            "format": "int64",
+                            "type": "integer"
                         }
                     }
                 ],
@@ -93,40 +276,134 @@
                 },
                 "responses": {
                     "200": {
-                        "description": "ok",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "type": "string"
                                 }
                             }
-                        }
+                        },
+                        "description": "ok"
                     },
                     "400": {
-                        "description": "We need ID!!",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/web.APIError"
                                 }
                             }
-                        }
+                        },
+                        "description": "We need ID!!"
                     },
                     "404": {
-                        "description": "Can not find ID",
                         "content": {
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/web.APIError"
                                 }
                             }
-                        }
+                        },
+                        "description": "Can not find ID"
                     }
-                }
+                },
+                "summary": "Add a new pet to the store"
             }
         },
         "/testapi/get-struct-array-by-string/{some_id}": {
             "get": {
+                "description": "get struct array by ID",
+                "operationId": "get-struct-array-by-string",
+                "parameters": [
+                    {
+                        "description": "Some ID",
+                        "in": "path",
+                        "name": "some_id",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "description": "Category",
+                        "in": "query",
+                        "name": "category",
+                        "required": true,
+                        "schema": {
+                            "enum": [
+                                1,
+                                2,
+                                3
+                            ],
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Offset",
+                        "in": "query",
+                        "name": "offset",
+                        "required": true,
+                        "schema": {
+                            "default": 0,
+                            "minimum": 0,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "Limit",
+                        "in": "query",
+                        "name": "limit",
+                        "required": true,
+                        "schema": {
+                            "default": 10,
+                            "maximum": 50,
+                            "type": "integer"
+                        }
+                    },
+                    {
+                        "description": "q",
+                        "in": "query",
+                        "name": "q",
+                        "required": true,
+                        "schema": {
+                            "default": "\"\"",
+                            "maxLength": 50,
+                            "minLength": 1,
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "string"
+                                }
+                            }
+                        },
+                        "description": "ok"
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/web.APIError"
+                                }
+                            }
+                        },
+                        "description": "We need ID!!"
+                    },
+                    "404": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/web.APIError"
+                                }
+                            }
+                        },
+                        "description": "Can not find ID"
+                    }
+                },
                 "security": [
                     {
                         "ApiKeyAuth": []
@@ -155,100 +432,7 @@
                             "admin"
                         ]
                     }
-                ],
-                "description": "get struct array by ID",
-                "operationId": "get-struct-array-by-string",
-                "parameters": [
-                    {
-                        "description": "Some ID",
-                        "name": "some_id",
-                        "in": "path",
-                        "required": true,
-                        "schema": {
-                            "type": "string"
-                        }
-                    },
-                    {
-                        "description": "Category",
-                        "name": "category",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "enum": [
-                                1,
-                                2,
-                                3
-                            ],
-                            "type": "integer"
-                        }
-                    },
-                    {
-                        "description": "Offset",
-                        "name": "offset",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "minimum": 0,
-                            "type": "integer",
-                            "default": 0
-                        }
-                    },
-                    {
-                        "description": "Limit",
-                        "name": "limit",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "maximum": 50,
-                            "type": "integer",
-                            "default": 10
-                        }
-                    },
-                    {
-                        "description": "q",
-                        "name": "q",
-                        "in": "query",
-                        "required": true,
-                        "schema": {
-                            "maxLength": 50,
-                            "minLength": 1,
-                            "type": "string",
-                            "default": "\"\""
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "ok",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "string"
-                                }
-                            }
-                        }
-                    },
-                    "400": {
-                        "description": "We need ID!!",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/web.APIError"
-                                }
-                            }
-                        }
-                    },
-                    "404": {
-                        "description": "Can not find ID",
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "$ref": "#/components/schemas/web.APIError"
-                                }
-                            }
-                        }
-                    }
-                }
+                ]
             }
         }
     },
@@ -256,178 +440,5 @@
         {
             "url": "https://petstore-user.swagger.io/v3"
         }
-    ],
-    "components": {
-        "schemas": {
-        "web.APIError": {
-            "type": "object",
-            "properties": {
-                "createdAt": {
-                    "type": "string"
-                },
-                "errorCode": {
-                    "type": "integer"
-                },
-                "errorMessage": {
-                    "type": "string"
-                }
-            }
-        },
-        "web.Pet": {
-            "type": "object",
-            "properties": {
-                "category": {
-                    "type": "object",
-                    "properties": {
-                        "id": {
-                            "type": "integer",
-                            "example": 1
-                        },
-                        "name": {
-                            "type": "string",
-                            "example": "category_name"
-                        },
-                        "photoURLs": {
-                            "type": "array",
-                            "items": {
-                                "type": "string",
-                                "format": "url"
-                            },
-                            "example": [
-                                "http://test/image/1.jpg",
-                                "http://test/image/2.jpg"
-                            ]
-                        },
-                        "smallCategory": {
-                            "type": "object",
-                            "properties": {
-                                "id": {
-                                    "type": "integer",
-                                    "example": 1
-                                },
-                                "name": {
-                                    "type": "string",
-                                    "example": "detail_category_name"
-                                },
-                                "photoURLs": {
-                                    "type": "array",
-                                    "items": {
-                                        "type": "string"
-                                    },
-                                    "example": [
-                                        "http://test/image/1.jpg",
-                                        "http://test/image/2.jpg"
-                                    ]
-                                }
-                            }
-                        }
-                    }
-                },
-                "data": {},
-                "decimal": {
-                    "type": "number"
-                },
-                "id": {
-                    "type": "integer",
-                    "format": "int64",
-                    "example": 1
-                },
-                "isAlive": {
-                    "type": "boolean",
-                    "example": true
-                },
-                "name": {
-                    "type": "string",
-                    "example": "poti"
-                },
-                "pets": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/components/schemas/web.Pet2"
-                    }
-                },
-                "pets2": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/components/schemas/web.Pet2"
-                    }
-                },
-                "photoURLs": {
-                    "type": "array",
-                    "items": {
-                        "type": "string"
-                    },
-                    "example": [
-                        "http://test/image/1.jpg",
-                        "http://test/image/2.jpg"
-                    ]
-                },
-                "price": {
-                    "type": "number",
-                    "multipleOf": 0.01,
-                    "example": 3.25
-                },
-                "status": {
-                    "type": "string"
-                },
-                "tags": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/components/schemas/web.Tag"
-                    }
-                },
-                "uuid": {
-                    "type": "string"
-                }
-            }
-        },
-        "web.Pet2": {
-            "type": "object",
-            "properties": {
-                "deletedAt": {
-                    "type": "string"
-                },
-                "id": {
-                    "type": "integer"
-                },
-                "middleName": {
-                    "type": "string"
-                }
-            }
-        },
-        "web.RevValue": {
-            "type": "object",
-            "properties": {
-                "data": {
-                    "type": "integer"
-                },
-                "err": {
-                    "type": "integer",
-                    "format": "int32"
-                },
-                "status": {
-                    "type": "boolean"
-                }
-            }
-        },
-        "web.Tag": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "integer",
-                    "format": "int64"
-                },
-                "name": {
-                    "type": "string"
-                },
-                "pets": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/components/schemas/web.Pet"
-                    }
-                }
-            }
-        }
-        }
-    }
+    ]
 }
