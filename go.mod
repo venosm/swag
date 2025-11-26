@@ -4,7 +4,6 @@ go 1.25
 
 require (
 	github.com/KyleBanks/depth v1.2.1
-	github.com/buger/jsonparser v1.1.1
 	github.com/go-openapi/spec v0.21.0
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v2 v2.27.7
